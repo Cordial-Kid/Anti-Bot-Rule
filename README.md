@@ -22,9 +22,7 @@ anti-bot-rule/
 ├── Level_2.py                      # Level 2：跨字段一致性检查
 ├── Level_3.py                      # Level 3：高级指纹与环境稳定性检查
 ├── json_to_excel.py                # JSON 数据展开为 output.xlsx
-├── anti_bot_rule_documentation.md  # 详细项目说明与加权原则
-├── data_read.md                    # 数据读取和特征工程调研说明
-├── output.xlsx                     # 输入数据文件
+├── output_example.xlsx             # 输入数据文件样例
 └── final_analysis.xlsx             # 最终评分输出
 ```
 
@@ -40,7 +38,7 @@ pip install pandas openpyxl
 
 ## Quick Start
 
-如果当前目录下已经存在 `output.xlsx`，直接运行：
+将`main.py`中的`output.xlsx`改为`output_example.xlsx`,直接运行：
 
 ```bash
 python main.py
@@ -251,4 +249,4 @@ flat audio sample: +20
 
 ## License
 
-未指定许可证。如需开源发布，建议补充 `LICENSE` 文件。
+未指定许可证。
