@@ -1,252 +1,414 @@
-# Anti Bot Rule
+# Anti Bot Rule 使用说明
 
-基于浏览器指纹的可解释反爬/反自动化规则评分项目。
+这是一个基于浏览器指纹数据的反自动化检测项目。项目会从 MySQL 原始数据表读取浏览器指纹，按 Level 1/2/3 规则评分，再把检测结果写入 MySQL 结果表，最后由 Node 后端和 React 前端展示。
 
-本项目将浏览器侧采集到的指纹信号拆分为三个 Level，分别计算风险分，最后通过加权汇总得到最终 `risk_score`。项目当前采用规则评分方式，不依赖机器学习模型，适合用于规则验证、风险分析、样本回溯和后续模型特征工程。
+## 1. 项目流程
 
-## Features
+```text
+MySQL 原始表 bfp_event
+        |
+        v
+Python pipeline 分批读取、解析、评分
+        |
+        v
+bot_detection_results + bot_rule_hits
+        |
+        v
+Node.js backend API
+        |
+        v
+React frontend dashboard
+```
 
-- 三层浏览器指纹风险规则
-- 可解释评分结果，每条命中规则会写入 `reasons`
-- 支持从 JSON 展平为 Excel
-- 输出每个 Level 的分析结果和最终汇总结果
-- 权重集中配置，便于调参
-
-## Project Structure
+## 2. 目录结构
 
 ```text
 anti-bot-rule/
-├── main.py                         # 主入口，运行完整评分流程
-├── score.py                        # 分数归一化与最终加权汇总
-├── Level_1.py                      # Level 1：基础可用性与明显自动化信号
-├── Level_2.py                      # Level 2：跨字段一致性检查
-├── Level_3.py                      # Level 3：高级指纹与环境稳定性检查
-├── json_to_excel.py                # JSON 数据展开为 output.xlsx
-├── output_example.xlsx             # 输入数据文件样例
-└── final_analysis.xlsx             # 最终评分输出
+├── main.py                    # Python pipeline 入口
+├── .env                       # Python pipeline 数据库配置
+├── pipeline/                  # 读取、评分、写库逻辑
+│   ├── main.py
+│   ├── data_read.py
+│   ├── save_to_sql.py
+│   ├── score.py
+│   └── levels/
+│       ├── level_1.py
+│       ├── level_2.py
+│       └── level_3.py
+├── backend/                   # Node.js API 服务
+│   ├── server.js
+│   └── .env                   # 后端数据库配置
+├── frontend/                  # React 前端
+│   ├── src/
+│   └── .env.local             # 前端 API 配置
+└── docs/                      # 辅助文档
 ```
 
-## Requirements
+## 3. 环境要求
 
-建议使用 Python 3.9+。
+需要提前安装：
 
-主要依赖：
+- Python 3.10+
+- Node.js 18+
+- MySQL
 
-```bash
-pip install pandas openpyxl
+Python 依赖在 `requirements.txt` 中，主要包括：
+
+```text
+pandas
+SQLAlchemy
+PyMySQL
+openpyxl
 ```
 
-## Quick Start
+如果没有虚拟环境，可以在项目根目录创建：
 
-将`main.py`中的`output.xlsx`改为`output_example.xlsx`,直接运行：
+```powershell
+python -m venv .venv
+.\.venv\Scripts\activate
+pip install -r requirements.txt
+```
 
-```bash
+## 4. 原始数据表要求
+
+当前默认读取的原始表是：
+
+```text
+anti_bot.bfp_event
+```
+
+至少需要包含这些字段：
+
+| 字段 | 说明 |
+|---|---|
+| `id` | 自增主键，分批读取依赖它 |
+| `username` | 用户标识 |
+| `url` | 访问 URL |
+| `delta_time` | 行为耗时 |
+| `click_time` | 事件时间 |
+| `cookie_hash` | cookie 指纹 |
+| `canvas_hash` | canvas 指纹 |
+| `webgl_hash` | webgl 指纹 |
+| `fonts_hash` | 字体指纹 |
+| `user_agent` | User-Agent |
+| `rest_json` | 原始指纹 JSON |
+| `created_at` | 入库时间 |
+
+`rest_json` 中当前支持这些结构：
+
+- `leve1`
+- `leve2`
+- `level3`
+- `keyboard`
+- `mousemove`
+- `llmNature`
+
+注意：原始数据里字段名是 `leve1`、`leve2`，代码已经做了适配。
+
+## 5. 配置 Python pipeline
+
+编辑项目根目录 `.env`：
+
+```env
+ANTIBOT_DB_HOST=localhost
+ANTIBOT_DB_PORT=3306
+ANTIBOT_DB_USER=root
+ANTIBOT_DB_PASSWORD=你的MySQL密码
+ANTIBOT_DB_NAME=anti_bot
+ANTIBOT_DB_CHARSET=utf8mb4
+
+ANTIBOT_SOURCE_TABLE=bfp_event
+ANTIBOT_SOURCE_JSON_FIELD=rest_json
+
+ANTIBOT_BATCH_SIZE=10000
+ANTIBOT_MAX_ROWS=
+
+ANTIBOT_RESULT_TABLE=bot_detection_results
+ANTIBOT_RULE_HIT_TABLE=bot_rule_hits
+```
+
+说明：
+
+- `ANTIBOT_SOURCE_TABLE` 是原始数据表。
+- `ANTIBOT_SOURCE_JSON_FIELD` 是原始 JSON 字段，当前是 `rest_json`。
+- `ANTIBOT_BATCH_SIZE` 是每批处理多少行，默认 `10000`。
+- `ANTIBOT_MAX_ROWS` 留空表示处理全部数据；测试时可以设成 `50000`。
+- 结果表会自动创建。
+
+## 6. 运行 Python pipeline
+
+在项目根目录执行：
+
+```powershell
+.\.venv\Scripts\python.exe main.py
+```
+
+运行成功后会看到类似输出：
+
+```text
+processed batch 1: source id 1-10000, 10000 source rows, 10000 result rows
+...
+saved detection results to MySQL in batches: 1086415 result rows, 631839 rule hit rows, 109 batches, batch=xxxx
+```
+
+这表示已经写入：
+
+- `bot_detection_results`
+- `bot_rule_hits`
+
+如果只想测试前 5 万行，在当前命令行设置：
+
+cmd:
+
+```bat
+set ANTIBOT_MAX_ROWS=50000
 python main.py
 ```
 
-运行后会生成：
+PowerShell:
 
-```text
-final_analysis.xlsx
-```
-
-如果需要先从 JSON 数据生成 Excel：
-
-```bash
-python json_to_excel.py
+```powershell
+$env:ANTIBOT_MAX_ROWS="50000"
 python main.py
 ```
 
-也可以单独运行某一层规则：
+如果要恢复处理全部数据，把 `ANTIBOT_MAX_ROWS` 清空或重新打开终端。
 
-```bash
-python Level_1.py
-python Level_2.py
-python Level_3.py
-```
+重要：pipeline 默认是追加写入。如果重复运行，会向结果表追加一批新的结果，不会自动清空旧数据。
 
-对应输出：
+## 7. 结果表说明
 
-```text
-level1_analysis.xlsx
-level2_analysis.xlsx
-level3_analysis.xlsx
-```
+### `bot_detection_results`
 
-## Input
-
-主流程默认读取：
-
-```text
-output.xlsx
-```
-
-Excel 中应包含基础字段：
-
-```text
-username
-timestamp
-ip
-```
-
-以及三层指纹字段，例如：
-
-```text
-level1.webdriver
-level1.userAgent
-level2.platform
-level2.gpuVendor
-level2.gpuRenderer
-level3.fontsCount
-level3.audioSample
-level3.requestIdleCallbackSupported
-```
-
-代码中会将字段名中的 `.` 转换为 `_` 后再访问，例如 `level1.webdriver` 会变为 `level1_webdriver`。
-
-## Output
-
-最终输出文件：
-
-```text
-final_analysis.xlsx
-```
+一条原始事件对应一条检测结果。
 
 主要字段：
 
 | 字段 | 说明 |
 |---|---|
-| `user_name` | 用户名 |
-| `timestamp` | 请求时间 |
-| `user_ip` | 用户 IP |
+| `save_batch_id` | 一次 pipeline 运行的批次 ID |
+| `event_id` | 原始表 `id` |
+| `user_name` | 原始 `username` |
+| `user_ip` | 当前原始数据没有 IP 时为空 |
+| `user_agent` | 原始 User-Agent |
+| `event_time` | 原始 `click_time` |
+| `level1_score` | Level 1 归一化分数 |
+| `level2_score` | Level 2 归一化分数 |
+| `level3_score` | Level 3 归一化分数 |
 | `risk_score` | 最终风险分 |
+| `risk_level` | 风险等级 |
+| `suggested_action` | 建议动作 |
+| `level1_reasons` | Level 1 命中原因 |
+| `level2_reasons` | Level 2 命中原因 |
+| `level3_reasons` | Level 3 命中原因 |
+| `all_reasons` | 所有原因 JSON |
+| `all_rule_hits` | 所有命中规则 JSON |
 
-单层分析输出会额外包含：
+### `bot_rule_hits`
+
+规则命中明细表。一条检测结果可能有多条规则命中。
+
+主要字段：
 
 | 字段 | 说明 |
 |---|---|
-| `normalized_score` | 当前 Level 的归一化风险分 |
-| `reasons` | 命中的规则原因 |
+| `result_id` | 关联 `bot_detection_results.id` |
+| `event_id` | 原始事件 ID |
+| `user_name` | 用户标识 |
+| `level` | Level 1/2/3 |
+| `rule_code` | 规则代码 |
+| `rule_name` | 规则名称 |
+| `weight` | 规则权重 |
+| `reason` | 命中原因 |
 
-## Scoring Model
+## 8. 启动后端
 
-三个 Level 内部均采用 100 分封顶：
+编辑 `backend/.env`：
 
-```python
-MAX_LEVEL1_SCORE = 100
-MAX_LEVEL2_SCORE = 100
-MAX_LEVEL3_SCORE = 100
+```env
+PORT=8080
+CORS_ORIGIN=*
+
+ANTIBOT_DB_HOST=localhost
+ANTIBOT_DB_PORT=3306
+ANTIBOT_DB_USER=root
+ANTIBOT_DB_PASSWORD=你的MySQL密码
+ANTIBOT_DB_NAME=anti_bot
+ANTIBOT_DB_CHARSET=utf8mb4
+
+ANTIBOT_RESULT_TABLE=bot_detection_results
+ANTIBOT_RULE_HIT_TABLE=bot_rule_hits
 ```
 
-最终加权公式定义在 `score.py`：
+启动：
 
-```python
-LEVEL_WEIGHTS = (0.35, 0.25, 0.40)
+```powershell
+cd backend
+npm install
+npm run dev
 ```
 
-即：
+检查后端是否正常：
 
 ```text
-final_score = level1_score * 0.35
-            + level2_score * 0.25
-            + level3_score * 0.40
+http://127.0.0.1:8080/health
 ```
 
-权重含义：
-
-| Level | 权重 | 说明 |
-|---|---:|---|
-| Level 1 | 35% | 基础自动化信号，例如 webdriver、HeadlessChrome |
-| Level 2 | 25% | 跨字段一致性信号，价值高但误伤可能较多 |
-| Level 3 | 40% | 高级指纹和虚拟化环境信号，例如 SwiftShader、音频、字体 |
-
-## Rule Levels
-
-### Level 1: Basic Usability Check
-
-关注基础浏览器环境和明显自动化特征。
-
-典型规则：
-
-- `webdriver=true`
-- UA 中包含 `HeadlessChrome`
-- 插件或 MIME 类型缺失
-- 语言列表为空
-- `hardwareConcurrency` 异常
-- UA 为空或过短
-
-强信号示例：
+常用接口：
 
 ```text
-webdriver=true: +50
-HeadlessChrome in userAgent: +50
+GET /api/v1/stats/defense
+GET /api/v1/stats/purity
+GET /api/v1/logs/live
+GET /api/v1/logs/scatter
+GET /api/v1/detections
+GET /api/v1/rules/top
 ```
 
-### Level 2: Cross-field Consistency Check
+## 9. 启动前端
 
-关注不同字段之间是否互相矛盾。
+编辑 `frontend/.env.local`：
 
-典型规则：
+```env
+VITE_BACKEND_ORIGIN=http://127.0.0.1:8080
+VITE_API_BASE_URL=http://127.0.0.1:8080
+VITE_API_TIMEOUT_MS=6000
+VITE_USE_MOCK=false
+VITE_API_FALLBACK_TO_MOCK=false
+```
 
-- UA 与 platform 不一致
-- GPU 与 UA 操作系统不一致
-- Chrome UA 但 Chrome API 结构异常
-- screen/window 过于一致
-- deviceMemory 异常
+启动：
 
-强信号示例：
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+浏览器打开 Vite 输出的地址，一般是：
 
 ```text
-UA-platform mismatch: +40
-GPU inconsistent with UA: +25
+http://127.0.0.1:5173
 ```
 
-### Level 3: Advanced Fingerprinting
+注意：修改 `frontend/.env.local` 后必须重启前端 dev server。
 
-关注高级浏览器指纹和运行环境稳定性。
+## 10. 前端数据是不是 mock
 
-典型规则：
+前端是否使用 mock 由 `frontend/.env.local` 控制：
 
-- 字体数量异常
-- audio sample 缺失或全平
-- SwiftShader 虚拟 GPU
-- MediaDevices / SpeechSynthesis / queueMicrotask 等 API 缺失
-- DevTools 痕迹
+```env
+VITE_USE_MOCK=false
+VITE_API_FALLBACK_TO_MOCK=false
+```
 
-强信号示例：
+建议保持上面配置。这样如果后端接口失败，浏览器控制台会直接报错，而不是悄悄显示 mock 数据。
+
+如果看到这些数字，很可能是 mock：
 
 ```text
-SwiftShader virtual GPU: +60
-flat audio sample: +20
+2,847,xxx
+15,xxx
+18,924,xxx
 ```
 
-## Risk Levels
+真实数据可以直接访问后端确认：
 
-建议按最终 `risk_score` 分层：
+```text
+http://127.0.0.1:8080/api/v1/stats/defense
+```
 
-| 分数 | 风险等级 | 建议动作 |
-|---:|---|---|
-| 0-25 | Low | 正常放行，仅记录 |
-| 25-45 | Suspicious | 观察、限频、增加日志 |
-| 45-65 | Medium High | 触发轻量挑战或二次验证 |
-| 65+ | High | 强验证、限流或拦截 |
+## 11. 实时拦截日志说明
 
-阈值应结合真实业务数据和人工标注样本继续校准。
+前端的实时拦截日志不是 WebSocket，也不是网关实时推送，而是前端每 1.4 秒轮询：
 
-## Design Principles
+```text
+GET /api/v1/logs/live?limit=14
+```
 
-- 强自动化信号高权重，例如 `webdriver=true`、`HeadlessChrome`、`SwiftShader`
-- 弱信号低权重，例如 notification 状态、screen/window 过于一致
-- 缺失数据单独处理，避免同一采集失败原因被重复扣分
-- 字段互相矛盾比字段缺失更重要
-- 三个 Level 使用统一 100 分尺度，便于调参
+后端从 `bot_detection_results` 中取最新检测结果：
 
-## Notes
+```sql
+ORDER BY COALESCE(event_time, created_at) DESC, id DESC
+LIMIT 14
+```
 
-- 当前项目偏规则验证和风险分析，生产环境中建议结合业务行为特征、访问频率、账号画像等信息使用。
-- 当前部分字段解析仍使用 `eval()`，后续建议替换为 `ast.literal_eval()` 以提升稳定性和安全性。
-- 权重不是固定答案，应结合真实样本的误伤率和漏判率持续调整。
+当前日志显示原始信息，不做 hash：
 
-## License
+- username
+- event id
+- user ip
+- user agent
+- risk score
 
-未指定许可证。
+## 12. 常见问题
+
+### 1. 为什么运行时提示表不存在
+
+例如：
+
+```text
+Table 'anti_bot.fingerprints' doesn't exist
+```
+
+说明当前环境变量指向了错误的源表。检查：
+
+cmd:
+
+```bat
+set ANTIBOT
+```
+
+PowerShell:
+
+```powershell
+Get-ChildItem Env:ANTIBOT*
+```
+
+项目使用的是 `ANTIBOT_SOURCE_TABLE`，不是 `ANTIBOT_DB_TABLE`。
+
+### 2. 为什么只处理了一部分数据
+
+检查是否设置了：
+
+```env
+ANTIBOT_MAX_ROWS
+```
+
+如果它不是空，就只会处理指定行数。
+
+### 3. 为什么前端显示 mock
+
+检查 `frontend/.env.local`：
+
+```env
+VITE_USE_MOCK=false
+VITE_API_FALLBACK_TO_MOCK=false
+```
+
+然后重启前端。
+
+### 4. 为什么重复运行后前端数量变多
+
+结果表是追加写入。重复运行 pipeline 会新增一批结果。可以通过 `save_batch_id` 区分不同运行批次。
+
+如果需要清空旧结果，手动执行 SQL 前请确认数据不再需要：
+
+```sql
+TRUNCATE TABLE bot_rule_hits;
+TRUNCATE TABLE bot_detection_results;
+```
+
+### 5. 100 万行会不会一次性加载到前端
+
+不会。Python pipeline 分批处理；后端接口也主要做分页或聚合查询。前端只拿需要展示的一小段数据。
+
+## 13. 推荐接手顺序
+
+1. 确认 MySQL 原始表 `bfp_event` 存在且字段正确。
+2. 配好根目录 `.env`。
+3. 先设置 `ANTIBOT_MAX_ROWS=50000` 跑一小批。
+4. 确认 `bot_detection_results` 和 `bot_rule_hits` 有数据。
+5. 清空测试结果后跑全量。
+6. 启动 backend，访问 `/health`。
+7. 启动 frontend，确认不是 mock 数据。

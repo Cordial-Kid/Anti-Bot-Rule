@@ -1,0 +1,184 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── CSS Variables ─────────────────────────────────── */
+:root {
+  --cyber-blue: #00d4ff;
+  --aurora-green: #00ff88;
+  --warning-orange: #ff6b35;
+  --danger-red: #ff3b55;
+  --caution-yellow: #ffcc00;
+  --dark-bg: #080d1a;
+  --card-bg: rgba(13, 20, 40, 0.85);
+}
+
+/* ─── Base ──────────────────────────────────────────── */
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--dark-bg);
+  color: #e2e8f0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  overflow-x: hidden;
+}
+
+/* ─── Scrollbar ─────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: rgba(255,255,255,0.04); }
+::-webkit-scrollbar-thumb { background: rgba(0,212,255,0.35); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(0,212,255,0.6); }
+
+/* ─── Background Grid ───────────────────────────────── */
+.bg-grid {
+  background-image:
+    linear-gradient(rgba(0,212,255,0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,212,255,0.035) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* ─── Glass Card ────────────────────────────────────── */
+.glass-card {
+  background: var(--card-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(0,212,255,0.15);
+  border-radius: 16px;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+.glass-card:hover {
+  border-color: rgba(0,212,255,0.35);
+  box-shadow: 0 0 30px rgba(0,212,255,0.12);
+}
+
+/* ─── Glow Variants ─────────────────────────────────── */
+.glow-blue  { box-shadow: 0 0 20px rgba(0,212,255,0.25); }
+.glow-green { box-shadow: 0 0 20px rgba(0,255,136,0.25); }
+.glow-orange{ box-shadow: 0 0 20px rgba(255,107,53,0.25); }
+.glow-red   { box-shadow: 0 0 20px rgba(255,59,85,0.25); }
+
+/* ─── Text Glow ─────────────────────────────────────── */
+.text-glow-blue  { text-shadow: 0 0 18px rgba(0,212,255,0.55); }
+.text-glow-green { text-shadow: 0 0 18px rgba(0,255,136,0.55); }
+.text-glow-red   { text-shadow: 0 0 18px rgba(255,59,85,0.55); }
+
+/* ─── Pulse Dot ─────────────────────────────────────── */
+@keyframes pulseDot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.45; transform: scale(0.75); }
+}
+.pulse-dot { animation: pulseDot 1.6s ease-in-out infinite; }
+
+/* ─── Live Indicator ────────────────────────────────── */
+@keyframes liveGlow {
+  0%, 100% { box-shadow: 0 0 3px var(--aurora-green); }
+  50%       { box-shadow: 0 0 14px var(--aurora-green), 0 0 28px rgba(0,255,136,0.3); }
+}
+.live-indicator { animation: liveGlow 2s ease-in-out infinite; }
+
+/* ─── Scanline (decorative) ─────────────────────────── */
+@keyframes scanLine {
+  0%   { top: -2px; }
+  100% { top: calc(100% + 2px); }
+}
+.scanline-wrap {
+  position: relative;
+  overflow: hidden;
+}
+.scanline-wrap::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(0,212,255,0.4), transparent);
+  animation: scanLine 9s linear infinite;
+  pointer-events: none;
+}
+
+/* ─── Number Counter ────────────────────────────────── */
+.counter-wrapper {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* ─── Progress Bar Fill ─────────────────────────────── */
+@keyframes progressFill {
+  from { width: 0%; }
+  to   { width: var(--w, 50%); }
+}
+.progress-fill { animation: progressFill 1.2s cubic-bezier(0.22,1,0.36,1) forwards; }
+
+/* ─── Radar Ping ────────────────────────────────────── */
+@keyframes radarPing {
+  75%, 100% { transform: scale(2.5); opacity: 0; }
+}
+.radar-ping {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  animation: radarPing 2s cubic-bezier(0,0,0.2,1) infinite;
+}
+
+/* ─── Section Separator ─────────────────────────────── */
+.section-sep {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(0,212,255,0.25), transparent);
+}
+
+/* ─── Status Badge ──────────────────────────────────── */
+.badge-safe    { background: rgba(0,255,136,0.12); border: 1px solid rgba(0,255,136,0.4); color: #00ff88; }
+.badge-warning { background: rgba(255,204,0,0.12);  border: 1px solid rgba(255,204,0,0.4);  color: #ffcc00; }
+.badge-danger  { background: rgba(255,107,53,0.12); border: 1px solid rgba(255,107,53,0.4); color: #ff6b35; }
+.badge-critical{ background: rgba(255,59,85,0.12);  border: 1px solid rgba(255,59,85,0.4);  color: #ff3b55; }
+
+/* ─── Card Top Edge Highlight ───────────────────────── */
+.card-top-edge::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 10%; right: 10%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(0,212,255,0.5), transparent);
+  border-radius: 50%;
+}
+
+/* ─── Mono Font ─────────────────────────────────────── */
+.font-mono-custom {
+  font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+}
+
+/* ─── Blink Cursor ──────────────────────────────────── */
+@keyframes blinkCursor {
+  50% { opacity: 0; }
+}
+.cursor-blink::after {
+  content: '|';
+  color: var(--cyber-blue);
+  animation: blinkCursor 1s step-end infinite;
+}
+
+/* ─── Attack heat bar ───────────────────────────────── */
+@keyframes heatBarFill {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+.heat-bar-inner {
+  transform-origin: left;
+  animation: heatBarFill 1s cubic-bezier(0.22,1,0.36,1) forwards;
+  animation-delay: var(--delay, 0ms);
+}
+
+/* ─── Bot Detector Step ─────────────────────────────── */
+@keyframes stepComplete {
+  0%   { transform: scale(0); opacity: 0; }
+  60%  { transform: scale(1.2); }
+  100% { transform: scale(1); opacity: 1; }
+}
+.step-check { animation: stepComplete 0.35s ease-out forwards; }
+
+/* ─── Gradient Text ─────────────────────────────────── */
+.gradient-text {
+  background: linear-gradient(135deg, #00d4ff 0%, #00ff88 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
